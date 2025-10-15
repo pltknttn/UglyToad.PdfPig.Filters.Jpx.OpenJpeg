@@ -23,27 +23,41 @@ namespace UglyToad.PdfPig.Filters.Jpx.OpenJpeg
         {
             var codecFormat = GetCodecFormat(input.Span);
 
-            //OpenJpeg.Net uses the OpenJpeg 1.4 API
+            // OpenJpeg.Net uses the OpenJpeg 1.4 API
             var cInfo = new CompressionInfo(true, codecFormat);
 
-            //Sets up decoding parameters. Can for instance be used to
-            //speed up decoding of thumbnails by decoding less resolutions
+            // Sets up decoding parameters. Can for instance be used to
+            // speed up decoding of thumbnails by decoding less resolutions
             var parameters = new DecompressionParameters();
 
-            //Destination for the decoded image
+            // Destination for the decoded image
             JPXImage? img = null;
 
             using (var ms = MemoryHelper.AsReadOnlyMemoryStream(input))
             {
-                //cio is a wrapper that is used by the libary when
-                //reading. A bit like "BinaryReader"
+                // cio is a wrapper that is used by the libary when
+                // reading. A bit like "BinaryReader"
                 var cio = cInfo.OpenCIO(ms, true);
                 cInfo.SetupDecoder(cio, parameters);
 
                 //Decodes the image
-                if (!cInfo.ReadHeader(out img) || !cInfo.Decode(img) || !cInfo.EndDecompress())
+                bool readHeader = cInfo.ReadHeader(out img);
+                if (!readHeader)
                 {
-                    throw new Exception("Failed to get JPX compression information.");
+                    throw new Exception("Failed to read JPX header.");
+                }
+
+                bool decode = cInfo.Decode(img);
+                if (!decode)
+                {
+                    // See GHOSTSCRIPT-695241-0.pdf
+                    throw new Exception("Failed to decode JPX.");
+                }
+
+                bool endDecompress = cInfo.EndDecompress();
+                if (!endDecompress)
+                {
+                    throw new Exception("Failed to end JPX decompression.");
                 }
 
                 //If there's an error, you won't get an image. To get the error message,
@@ -54,12 +68,12 @@ namespace UglyToad.PdfPig.Filters.Jpx.OpenJpeg
                 }
             }
 
-            //Makes the bits per channel uniform so that it's easier
-            //to work with.
+            // Makes the bits per channel uniform so that it's easier
+            // to work with.
             img.MakeUniformBPC();
 
-            //Jpeg 2000 images can have a color palette, this removes
-            //that.
+            // Jpeg 2000 images can have a color palette, this removes
+            // that.
             img.ApplyIndex();
 
             //Handle some color spaces.
@@ -72,9 +86,9 @@ namespace UglyToad.PdfPig.Filters.Jpx.OpenJpeg
                     }
                     break;
             }
-            //Note, we don't here handle grayscale or CMY format. 
+            // Note, we don't here handle grayscale or CMY format. 
 
-            //Assembles the image into a stream of bytes
+            // Assembles the image into a stream of bytes
             using (var ms = img.ToMemoryStream())
             {
                 return ms.AsMemory();
