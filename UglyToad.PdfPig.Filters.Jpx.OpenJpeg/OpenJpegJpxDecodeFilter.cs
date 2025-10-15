@@ -2,6 +2,7 @@
 using System.Buffers.Binary;
 using UglyToad.PdfPig.Core;
 using UglyToad.PdfPig.Tokens;
+using UglyToad.PdfPig.Util;
 
 // Based on https://github.com/notBald/OpenJPEG.net README
 
@@ -21,6 +22,12 @@ namespace UglyToad.PdfPig.Filters.Jpx.OpenJpeg
         /// <inheritdoc/>
         public Memory<byte> Decode(Memory<byte> input, DictionaryToken streamDictionary, IFilterProvider filterProvider, int filterIndex)
         {
+            var length = streamDictionary.GetIntOrDefault(NameToken.Length, -1);
+            if (length > 0 && length < input.Length)
+            {
+                input = input.Slice(0, length);
+            }
+
             var codecFormat = GetCodecFormat(input.Span);
 
             // OpenJpeg.Net uses the OpenJpeg 1.4 API
